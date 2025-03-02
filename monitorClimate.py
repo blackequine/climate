@@ -9,23 +9,18 @@ except ImportError:
     from smbus import SMBus
 import adafruit_ina260
 from gpiozero import DigitalOutputDevice
-import MOSParameters('monClim')
+from MOSParameters import *
 #################################################################
 #################################################################
 # PARAMETERS
 # Set Poll interval to at least 5 minutes (300s) to prevent
 # excessive on/off of charging circuits
 VERSION="0.01b"
-LOGERRONLY = False
-LOGOPT= 2#0 don't log 2 log to syslog 1 log to stderr 3 log to all
 MONITORPOLLINTERVAL=5 #seconds
 MIN_VOLTAGE=12.5 #minimum Pb battery voltage to allow charging
 MIN_CAM_PC=70 #minimum percentage of camera charge before charging
 MIN_MULTI_CHARGE=13.0 #minimum Pb battery voltage to charge two cams
 CAM_CHARGED=100
-ZEROUSER="fieldcontrol"
-ZEROPASSWD="excrement69Yuk"
-MQTTCONNECTTIMEOUT=5 #seconds
 CONTROLROOT="climateMonitor/"
 ################################################################
 ################################################################
@@ -40,7 +35,7 @@ MEASUREMENTS = \
 # Camera batteries to charge
 # List of tuples (camera_entity_id, control_relay_index)
 #CAMERABATTS=[('winter_field', 1), ('summer_field', 0)]
-#BATTROOT='/battPerCent'
+BATTROOT='/battPerCent'
 
 ################################################################
 ################################################################
@@ -81,7 +76,7 @@ def getParameters(handle):
     # parameters['PbVMin']=floatMosParameter('PbVMin',handle,MIN_VOLTAGE)
     # parameters['MinCamPC']=intMosParameter('MinCamPC',handle,MIN_CAM_PC)
     # parameters['PbMultiV']=floatMosParameter('PbMultiV',handle,MIN_MULTI_CHARGE)
-    parameters['MonPoll']=intMosParameter('MonPoll',handle,MONITORPOLLINTERVAL)
+    parameters['MonPoll']=intMosParameter('MonPoll',handle,MONITORPOLLINTERVAL,BATTROOT)
     return parameters
 ################################################################
 ################################################################
@@ -104,12 +99,12 @@ def getParameters(handle):
 #################################################################
 #################################################################
 # Setup for single conversions
-def setupINA260():
+def setupINA260(logger):
     i2c = busio.I2C(1, 0)
     devices = i2c.scan()
     if not devices:
-        doLog ("Fatal Error: No devices found on i2C bus.",error=True)
-        doLog ("Terminsting.",error=true)
+        logger.log ("Fatal Error: No devices found on i2C bus.",error=True)
+        logger.log ("Terminating.",error=True)
         exit(1)
     ina260 = adafruit_ina260.INA260(i2c)
     return ina260
@@ -127,36 +122,36 @@ def ina260Get(ina260,property):
 ##############################################################
 ##############################################################
 # MAIN PROGRAM
-
-doLog("Monitor Climate v"+VERSION,error=True)
-doExit = sigExit()
-doLog("Setting up hardware: ", end="")
-doLog(" INA260 ",end="")
-ina260 = setupINA260()
+logger = doLog()
+logger.log("Monitor Climate v"+VERSION,error=True)
+doExit = sigExit(logger)
+logger.log("Setting up hardware: ", end="")
+logger.log(" INA260 ",end="")
+ina260 = setupINA260(logger)
 #last_values are values after scaling
 last_values={}
 for (key,factor,unit) in MEASUREMENTS:
     last_values[key]=0.0
-#doLog(" relays ", end="")
+#logger.log(" relays ", end="")
 #relays = setupRelays()
-doLog(" done.")
-doLog("Setting up MQTT ...", end="")
+logger.log(" done.")
+logger.log("Setting up MQTT ...", end="")
 #setup MQTT
-mosClient = setupMQTT()
+mosClient = setupMQTT(BATTROOT)
 if mosClient.connected_flag:
     #cameras = getCameras(CAMERABATTS,mosClient)
     parameters = getParameters(mosClient)
-    doLog(" done.")
+    logger.log(" done.")
     while not doExit.isSet():
         for (key,factor,unit) in MEASUREMENTS:
             value = ina260Get(ina260,key) * factor
             #only publish changes
             if value != last_values[key]:
                 last_values[key]= value
-                publishMQTT(mosClient,key,value,relays)
+                publishMQTT(mosClient,key,value,CONTROLROOT)
         #If Pb battery charged enough to support cameras?
         pbBattVolts = last_values['Voltage']
-        doLog("pbBatt : {:.3f} V".format(pbBattVolts))
+        logger.log("pbBatt : {:.3f} V".format(pbBattVolts))
         #if pbBattVolts>=parameters['PbVMin'].value():
             #does anything need charging? 
             #v 1.07 include those already charging (relay.value > 1) so that
@@ -191,13 +186,13 @@ if mosClient.connected_flag:
             # for r in relays:
                 # r.off()
         # for c in cameras:
-            # doLog("{:12} {:3}%".format(c.entityID(),c.chargePC()))
+            # logger.log("{:12} {:3}%".format(c.entityID(),c.chargePC()))
         doExit.wait(parameters['MonPoll'].value())
 else:
-    doLog("Connection failed rc=",str(mosClient.connected_rc),error=True)
+    logger.log("Connection failed rc=",str(mosClient.connected_rc),error=True)
     syslog.closelog()
     exit(mosClient.connected_rc)
-doLog("Exiting")
+logger.log("Exiting")
 finishMQTT(mosClient)
-syslog.closelog()
+logger.close()
 exit(0)
