@@ -9,7 +9,7 @@ except ImportError:
     from smbus import SMBus
 import adafruit_ina260
 from gpiozero import DigitalOutputDevice
-import MOSParameters
+import MOSParameters('monClim')
 #################################################################
 #################################################################
 # PARAMETERS
@@ -127,7 +127,7 @@ def ina260Get(ina260,property):
 ##############################################################
 ##############################################################
 # MAIN PROGRAM
-syslog.openlog(ident='monClim')
+
 doLog("Monitor Climate v"+VERSION,error=True)
 doExit = sigExit()
 doLog("Setting up hardware: ", end="")
