@@ -157,7 +157,7 @@ if mosClient.connected_flag:
         #If Pb battery charged enough to support cameras?
         pbBattVolts = last_values['Voltage']
         doLog("pbBatt : {:.3f} V".format(pbBattVolts))
-        if pbBattVolts>=parameters['PbVMin'].value():
+        #if pbBattVolts>=parameters['PbVMin'].value():
             #does anything need charging? 
             #v 1.07 include those already charging (relay.value > 1) so that
             #the charging focus is always on the least charged camera
@@ -187,7 +187,7 @@ if mosClient.connected_flag:
             # while turnOff:
                 # relays[turnOff[0].relay()].off()
                 # turnOff.pop(0)
-        else: #need to turn off camera charging
+        #else: #need to turn off camera charging
             # for r in relays:
                 # r.off()
         # for c in cameras:
